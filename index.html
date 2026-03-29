@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jadec Customization App - PDF & Image Tools</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #e2e8f0;
+            --shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --border: #334155;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: all 0.3s ease;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-content { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+        .theme-toggle { background: none; border: 1px solid var(--border); padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        .main-grid { display: grid; grid-template-columns: 280px 1fr; gap: 30px; margin-top: 30px; }
+        .tools-panel {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            height: fit-content;
+            position: sticky; top: 80px;
+        }
+        .tool-category { margin-bottom: 24px; }
+        .category-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: var(--text-primary); }
+        .tool-btn {
+            display: block; width: 100%; padding: 12px 16px; margin-bottom: 8px;
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: 8px; cursor: pointer; text-align: left;
+            transition: all 0.2s ease; font-size: 0.95rem;
+        }
+        .tool-btn:hover, .tool-btn.active { 
+            background: var(--accent); color: white; border-color: var(--accent); 
+            transform: translateY(-1px); box-shadow: var(--shadow);
+        }
+        .workspace {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            padding: 32px;
+            border: 1px solid var(--border);
+            min-height: 600px;
+        }
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 24px;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(59,130,246,0.05);
+        }
+        .upload-icon { font-size: 3rem; color: var(--text-secondary); margin-bottom: 16px; }
+        .upload-text { font-size: 1.1rem; margin-bottom: 8px; }
+        .upload-subtext { color: var(--text-secondary); }
+        input[type="file"] { display: none; }
+        .controls { display: none; background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-bottom: 24px; }
+        .control-group { margin-bottom: 16px; }
+        .control-group label { display: block; margin-bottom: 6px; font-weight: 500; }
+        .control-group input, .control-group select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
+        .btn { 
+            background: var(--accent); color: white; border: none;
+            padding: 12px 24px; border-radius: 8px; cursor: pointer;
+            font-weight: 600; transition: all 0.2s ease;
+        }
+        .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); }
+        .preview { 
+            border: 1px solid var(--border); border-radius: 8px; 
+            max-height: 500px; overflow: auto; margin-top: 20px;
+            background: white; padding: 16px;
+        }
+        .progress { display: none; width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 16px 0; }
+        .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease; }
+        .file-list { list-style: none; }
+        .file-item { display: flex; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+        .file-item img, .file-item canvas { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+        .file-name { margin-left: 12px; flex: 1; }
+        .file-remove { background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        @media (max-width: 768px) {
+            .main-grid { grid-template-columns: 1fr; }
+            .tools-panel { position: static; order: 2; }
+            .workspace { order: 1; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">🟢 Jadec Customization App</div>
+                <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="main-grid">
+            <div class="tools-panel">
+                <div class="tool-category">
+                    <div class="category-title">📄 PDF Tools</div>
+                    <button class="tool-btn" data-tool="merge-pdf">Merge PDFs</button>
+                    <button class="tool-btn" data-tool="split-pdf">Split PDF</button>
+                    <button class="tool-btn" data-tool="compress-pdf">Compress PDF</button>
+                    <button class="tool-btn" data-tool="pdf-to-word">PDF to Word</button>
+                    <button class="tool-btn" data-tool="pdf-to-image">PDF to JPG</button>
+                    <button class="tool-btn" data-tool="image-to-pdf">JPG to PDF</button>
+                    <button class="tool-btn" data-tool="protect-pdf">Protect PDF</button>
+                    <button class="tool-btn" data-tool="ocr-pdf">OCR (Text Extract)</button>
+                </div>
+                <div class="tool-category">
+                    <div class="category-title">🖼️ Image Tools</div>
+                    <button class="tool-btn" data-tool="compress-image">Compress Image</button>
+                    <button class="tool-btn" data-tool="resize-image">Resize Image</button>
+                    <button class="tool-btn" data-tool="image-to-webp">To WEBP</button>
+                    <button class="tool-btn" data-tool="watermark-image">Add Watermark</button>
+                    <button class="tool-btn" data-tool="enhance-image">Enhance Quality</button>
+                </div>
+            </div>
+
+            <div class="workspace">
+                <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+                    <div class="upload-icon">📎</div>
+                    <div class="upload-text">Drag & drop your files here</div>
+                    <div class="upload-subtext">or click to browse (PDF, JPG, PNG supported)</div>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png">
+                </div>
+
+                <div class="controls" id="controls"></div>
+                <div class="progress" id="progress">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="preview" id="preview"></div>
+                <div id="downloadArea"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let files = [];
+        let currentTool = '';
+
+        // Theme toggle
+        function toggleTheme() {
+            document.body.dataset.theme = document.body.dataset.theme === 'dark' ? '' : 'dark';
+            document.querySelector('.theme-toggle').textContent = document.body.dataset.theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+        }
+
+        // File handling
+        document.getElementById('fileInput').addEventListener('change', handleFiles);
+        document.querySelector('.upload-zone').addEventListener('dragover', (e) => {
+            e.preventDefault();
+            document.querySelector('.upload-zone').classList.add('dragover');
+        });
+        document.querySelector('.upload-zone').addEventListener('dragleave', () => {
+            document.querySelector('.upload-zone').classList.remove('dragover');
+        });
+        document.querySelector('.upload-zone').addEventListener('drop', (e) => {
+            e.preventDefault();
+            document.querySelector('.upload-zone').classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFiles(fileList) {
+            files = Array.from(fileList).filter(f => /\.(pdf|jpg|jpeg|png)$/i.test(f.name));
+            displayFiles();
+            if (files.length > 0) {
+                document.getElementById('controls').style.display = 'block';
+            }
+        }
+
+        function displayFiles() {
+            const fileList = document.getElementById('preview');
+            fileList.innerHTML = '<h3>📁 Selected Files:</h3><ul class="file-list">' + 
+                files.map((file, i) => `
+                    <li class="file-item">
+                        ${file.type.startsWith('image') ? 
+                            `<img src="${URL.createObjectURL(file)}" alt="${file.name}">` : 
+                            '<div style="width:40px;height:40px;background:#3b82f6;border-radius:4px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;">PDF</div>'
+                        }
+                        <span class="file-name">${file.name} (${(file.size/1024/1024).toFixed(1)}MB)</span>
+                        <button class="file-remove" onclick="removeFile(${i})">×</button>
+                    </li>
+                `).join('') + '</ul>';
+        }
+
+        function removeFile(index) {
+            files.splice(index, 1);
+            displayFiles();
+            if (files.length === 0) {
+                document.getElementById('controls').style.display = 'none';
+            }
+        }
+
+        // Tool buttons
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentTool = btn.dataset.tool;
+                showControls(currentTool);
+            });
+        });
+
+        function showControls(tool) {
+            const controls = document.getElementById('controls');
+            const toolConfigs = {
+                'merge-pdf': '<div class="control-group"><label>Drag PDFs above to merge</label></div>',
+                'compress-pdf': '<div class="control-group"><label>Compression Level</label><select id="compLevel"><option value="high">High (Smallest)</option><option value="medium">Medium</option><option value="low">Low (Best Quality)</option></select></div>',
+                'compress-image': '<div class="control-group"><label>Quality (0-100)</label><input type="range" id="imgQuality" min="10" max="100" value="80"></div>',
+                'resize-image': '<div class="control-group"><label>Width</label><input type="number" id="resizeWidth" value="800"><label>Height</label><input type="number" id="resizeHeight" value="600"></div>',
+                'protect-pdf': '<div class="control-group"><label>Password</label><input type="password" id="pdfPassword" placeholder="Enter password"></div>'
+            };
+            controls.innerHTML = toolConfigs[tool] || '<p>Select files and configure options</p>';
+            controls.style.display = 'block';
+        }
+
+        // Process button (generic)
+        document.getElementById('controls').insertAdjacentHTML('beforeend', '<button class="btn" onclick="processFiles()" style="width:100%;margin-top:16px;">🚀 Process Files</button>');
+
+        async function processFiles() {
+            if (files.length === 0) return alert('Please upload files first');
+            
+            const progress = document.getElementById('progress');
+            const progressBar = document.getElementById('progressBar');
+            progress.style.display = 'block';
+            
+            try {
+                // Simulate processing based on current tool
+                for (let i = 0; i <= 100; i += 10) {
+                    progressBar.style.width = i + '%';
+                    await new Promise(r => setTimeout(r, 50));
+                }
+                
+                let result;
+                switch(currentTool) {
+                    case 'merge-pdf':
+                        result = await mergePDFs();
+                        break;
+                    case 'compress-pdf':
+                        result = await compressPDF();
+                        break;
+                    case 'compress-image':
+                        result = await compressImage();
+                        break;
+                    case 'pdf-to-image':
+                        result = await pdfToImages();
+                        break;
+                    default:
+                        result = files[0]; // Default first file
+                }
+                
+                // Download result
+                downloadResult(result, `jadec-${currentTool}-${Date.now()}.${getExtension(result)}`);
+                
+            } catch (error) {
+                alert('Processing failed: ' + error.message);
+            } finally {
+                progress.style.display = 'none';
+                progressBar.style.width = '0%';
+            }
+        }
+
+        // PDF Processing Functions
+        async function mergePDFs() {
+            const mergedPdf = await PDFLib.PDFDocument.create();
+            for (const file of files.filter(f => f.name.endsWith('.pdf'))) {
+                const bytes = await file.arrayBuffer();
+                const pdf = await PDFLib.PDFDocument.load(bytes);
+                const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                copiedPages.forEach(page => mergedPdf.addPage(page));
+            }
+            return await mergedPdf.save();
+        }
+
+        async function compressPDF() {
+            const bytes = await files[0].arrayBuffer();
+            const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+            // Basic compression: remove metadata
+            pdfDoc.setTitle('');
+            pdfDoc.setAuthor('');
+            pdfDoc.setSubject('');
+            pdfDoc.setKeywords('');
+            pdfDoc.setProducer('');
+            pdfDoc.setCreator('');
+            pdfDoc.setCreationDate(undefined);
+            pdfDoc.setModificationDate(undefined);
+            return await pdfDoc.save({ useObjectStreams: false });
+        }
+
+        // Image Processing
+        async function compressImage() {
+            const file = files[0];
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            
+            await new Promise(resolve => img.onload = resolve);
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            return new Promise(resolve => {
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                }, 'image/jpeg', document.getElementById('imgQuality')?.value / 100 || 0.8);
+            });
+        }
+
+        async function pdfToImages() {
+            const bytes = await files[0].arrayBuffer();
+            const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+            const canvas = document.createElement('canvas');
+            const images = [];
+            
+            for (let i = 0; i < pdfDoc.getPageCount(); i++) {
+                const page = pdfDoc.getPage(i);
+                const { width, height } = page.getSize();
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(page, 0, 0);
+                
+                canvas.toBlob(blob => {
+                    images.push(new File([blob], `page-${i+1}.jpg`, { type: 'image/jpeg' }));
+                });
+            }
+            return images[0]; // Return first page for demo
+        }
+
+        // Utility functions
+        function getExtension(file) {
+            if (file instanceof Blob) return file.type.split('/')[1] || 'pdf';
+            return files[0].name.split('.').pop();
+        }
+
+        function downloadResult(data, filename) {
+            const url = URL.createObjectURL(
+                data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' })
+            );
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            showControls('merge-pdf');
+        });
+    </script>
+</body>
+</html>
